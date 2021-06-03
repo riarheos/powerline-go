@@ -99,8 +99,8 @@ var defaults = Config{
 			RepoBehind:     "↓",
 			RepoStaged:     "●",
 			RepoNotStaged:  "✚",
-			RepoUntracked:  "+",
-			RepoConflicted: "…",
+			RepoUntracked:  "…",
+			RepoConflicted: "✼",
 			RepoStashed:    "⚑",
 
 			VenvIndicator: "\uE235",
