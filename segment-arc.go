@@ -7,10 +7,23 @@ import (
 	"os/exec"
 )
 
-type counts struct {
-	Untracked int
-	Changed int
-	Staged int
+type arcStatusInfo struct {
+	BranchInfo struct {
+		Ahead  int
+		Behind int
+		Local  struct {
+			Name   string
+			Commit struct {
+				Id string
+			}
+		}
+		Detached bool
+	} `json:"branch_info"`
+	Status struct {
+		Untracked []struct{}
+		Changed   []struct{}
+		Staged    []struct{}
+	}
 }
 
 func runArcCommand(args ...string) ([]byte, error) {
@@ -20,7 +33,7 @@ func runArcCommand(args ...string) ([]byte, error) {
 	return out, err
 }
 
-func isArcTree(path string) (bool, error) {
+func isArcTree() (bool, error) {
 	out, err := runArcCommand("rev-parse", "--is-inside-work-tree")
 	if err != nil {
 		return false, err
@@ -29,60 +42,36 @@ func isArcTree(path string) (bool, error) {
 	return string(out) == "true\n", nil
 }
 
-func arcBranch() (string, error) {
-	out, err := runArcCommand("info", "--json")
+func arcStatus() (arcStatusInfo, error) {
+	out, err := runArcCommand("status", "--branch", "--json", "--no-sync-status")
 	if err != nil {
-		return "", err
+		return arcStatusInfo{}, err
 	}
 
-	var info struct {
-		Branch string `json:"branch"`
-	}
-
+	info := arcStatusInfo{}
 	err = json.Unmarshal(out, &info)
 	if err != nil {
-		return "", err
+		return arcStatusInfo{}, err
 	}
 
-	return info.Branch, nil
+	return info, nil
 }
 
-func arcStatus() (counts, error) {
-	out, err := runArcCommand("st", "--json", "--no-sync-status")
-	if err != nil {
-		return counts{}, err
+func makeSegment(p *powerline, segments *[]pwl.Segment, count int, symbol string, fg uint8, bg uint8) {
+	if count > 0 {
+		*segments = append(*segments, pwl.Segment{
+			Name:       "arc-status",
+			Content:    fmt.Sprintf("%d%s", count, symbol),
+			Foreground: fg,
+			Background: bg,
+		})
+		(*segments)[0].Background = p.theme.RepoDirtyBg
 	}
-
-	var info struct {
-		Status struct {
-			Untracked []struct {}
-			Changed []struct {}
-			Staged []struct {}
-		}
-	}
-	err = json.Unmarshal(out, &info)
-	if err != nil {
-		return counts{}, err
-	}
-
-	c := counts{}
-
-	c.Untracked = len(info.Status.Untracked)
-	c.Changed = len(info.Status.Changed)
-	c.Staged = len(info.Status.Staged)
-
-	return c, nil
 }
 
 func segmentArc(p *powerline) []pwl.Segment {
-	inTree, err := isArcTree(p.cwd)
+	inTree, err := isArcTree()
 	if err != nil || !inTree {
-		return []pwl.Segment{}
-	}
-
-
-	branch, err := arcBranch()
-	if err != nil {
 		return []pwl.Segment{}
 	}
 
@@ -91,42 +80,34 @@ func segmentArc(p *powerline) []pwl.Segment {
 		return []pwl.Segment{}
 	}
 
+	var branchName string
+	if status.BranchInfo.Detached {
+		branchName = fmt.Sprintf("%s %s", p.symbols.RepoDetached, status.BranchInfo.Local.Commit.Id[:10])
+	} else {
+		branchName = fmt.Sprintf("%s %s", p.symbols.RepoBranch, status.BranchInfo.Local.Name)
+	}
+
 	segments := []pwl.Segment{{
-		Name: "arc-branch",
-		Content: fmt.Sprintf("%s %s", p.symbols.RepoBranch, branch),
+		Name:       "arc-branch",
+		Content:    branchName,
 		Foreground: p.theme.RepoCleanFg,
 		Background: p.theme.RepoCleanBg,
 	}}
 
-	if status.Untracked > 0 {
-		segments = append(segments, pwl.Segment{
-			Name: "arc-untracked",
-			Content: fmt.Sprintf("%d%s", status.Untracked, p.symbols.RepoUntracked),
-			Foreground: p.theme.GitUntrackedFg,
-			Background: p.theme.GitUntrackedBg,
-		})
-		segments[0].Background = p.theme.RepoDirtyBg
-	}
+	makeSegment(p, &segments,
+		status.BranchInfo.Ahead, p.symbols.RepoAhead, p.theme.GitAheadFg, p.theme.GitAheadBg)
 
-	if status.Changed > 0 {
-		segments = append(segments, pwl.Segment{
-			Name: "arc-changed",
-			Content: fmt.Sprintf("%d%s", status.Changed, p.symbols.RepoNotStaged),
-			Foreground: p.theme.GitNotStagedFg,
-			Background: p.theme.GitNotStagedBg,
-		})
-		segments[0].Background = p.theme.RepoDirtyBg
-	}
+	makeSegment(p, &segments,
+		status.BranchInfo.Behind, p.symbols.RepoBehind, p.theme.GitBehindFg, p.theme.GitBehindBg)
 
-	if status.Staged > 0 {
-		segments = append(segments, pwl.Segment{
-			Name: "arc-staged",
-			Content: fmt.Sprintf("%d%s", status.Staged, p.symbols.RepoStaged),
-			Foreground: p.theme.GitStagedFg,
-			Background: p.theme.GitStagedBg,
-		})
-		segments[0].Background = p.theme.RepoDirtyBg
-	}
+	makeSegment(p, &segments,
+		len(status.Status.Untracked), p.symbols.RepoUntracked, p.theme.GitUntrackedFg, p.theme.GitUntrackedBg)
+
+	makeSegment(p, &segments,
+		len(status.Status.Changed), p.symbols.RepoNotStaged, p.theme.GitNotStagedFg, p.theme.GitNotStagedBg)
+
+	makeSegment(p, &segments,
+		len(status.Status.Staged), p.symbols.RepoStaged, p.theme.GitStagedFg, p.theme.GitStagedBg)
 
 	return segments
 }
