@@ -18,14 +18,13 @@ func segmentUser(p *powerline) []pwl.Segment {
 	var background uint8
 	if p.userIsAdmin {
 		background = p.theme.UsernameRootBg
+		return []pwl.Segment{{
+			Name:       "user",
+			Content:    userPrompt,
+			Foreground: p.theme.UsernameFg,
+			Background: background,
+		}}
 	} else {
-		background = p.theme.UsernameBg
+		return []pwl.Segment{}
 	}
-
-	return []pwl.Segment{{
-		Name:       "user",
-		Content:    userPrompt,
-		Foreground: p.theme.UsernameFg,
-		Background: background,
-	}}
 }

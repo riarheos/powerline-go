@@ -20,9 +20,9 @@ func segmentTermTitle(p *powerline) []pwl.Segment {
 	}
 
 	if p.cfg.Shell == "bash" {
-		title = "\\[\\e]0;\\u@\\h: \\w\\a\\]"
+		title = "\\[\\e]0;\\w\\a\\]"
 	} else if p.cfg.Shell == "zsh" {
-		title = "%{\033]0;%n@%m: %~\007%}"
+		title = "%{\033]0;%~\007%}"
 	} else {
 		cwd := p.cwd
 		title = fmt.Sprintf("\033]0;%s@%s: %s\007", p.username, p.hostname, cwd)
